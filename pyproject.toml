@@ -1,16 +1,13 @@
 [project]
 name = "vhe-astro-rag"
 version = "0.1.0"
-description = "Add your description here"
+description = "Retrieval-augmented QA over arXiv very high-energy astrophysics abstracts"
 readme = "README.md"
 authors = [
     { name = "Daniel Omar Avila Rojas" }
 ]
 requires-python = ">=3.12"
 dependencies = []
-
-[project.scripts]
-vhe-astro-rag = "vhe_astro_rag:main"
 
 [build-system]
 requires = ["uv_build>=0.13.1,<0.14.0"]
