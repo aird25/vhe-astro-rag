@@ -1,4 +1,5 @@
 from pathlib import Path
+import time
 import xml.etree.ElementTree as ET
 
 import requests
@@ -7,13 +8,17 @@ BASE_URL = "https://oaipmh.arxiv.org/oai"
 USER_AGENT = "vhe-astro-rag/0.1 (mailto:343157785+aird25@users.noreply.github.com)"
 TIMEOUT_SECONDS = 60
 OAI_NS = {"oai": "http://www.openarchives.org/OAI/2.0/"}
+DELAY_SECONDS = 3
 
 
 class OAIPMHError(Exception):
     """Raised when an OAI-PMH response contains an <error> element."""
 
 
-def fetch_page(params: dict[str, str], out_path: Path) -> requests.Response:
+def fetch_page(
+    params: dict[str, str],
+    out_path: Path,
+) -> requests.Response:
     """
     Send an OAI-PMH request and save the raw response body.
 
@@ -41,7 +46,9 @@ def fetch_page(params: dict[str, str], out_path: Path) -> requests.Response:
     return response
 
 
-def check_oai_error(root: ET.Element) -> None:
+def check_oai_error(
+    root: ET.Element,
+) -> None:
     """
     Raise OAIPMHError if an OAI-PMH response contains an <error> element.
 
@@ -58,7 +65,9 @@ def check_oai_error(root: ET.Element) -> None:
         raise OAIPMHError(f"{code}: {message}")
 
 
-def get_resumption_token(root: ET.Element) -> str | None:
+def get_resumption_token(
+    root: ET.Element,
+) -> str | None:
     """
     Return the resumptionToken of an OAI-PMH list response.
 
@@ -75,3 +84,49 @@ def get_resumption_token(root: ET.Element) -> str | None:
     if element is None or not (element.text or "").strip():
         return None
     return element.text
+
+
+def download_set(
+    set_spec: str,
+    out_dir: Path,
+    metadata_prefix: str = "arXivRaw",
+    max_pages: int | None = None,
+) -> list[Path]:
+    """
+    Download every page of an OAI-PMH ListRecords response for one set.
+
+    Pages are saved as page_0001.xml, page_0002.xml, ... in out_dir,
+    waiting DELAY_SECONDS between requests.
+
+    Args:
+        set_spec: OAI-PMH set, e.g. "physics:astro-ph:HE".
+        out_dir: Directory where the raw pages will be written.
+        metadata_prefix: Metadata format to request.
+        max_pages: Stop after this many pages (for testing); None for all.
+
+    Returns:
+        Paths of the saved pages, in download order.
+
+    Raises:
+        OAIPMHError: If a response reports a protocol error.
+    """
+    params = {"verb": "ListRecords", "set": set_spec, "metadataPrefix": metadata_prefix}
+    paths = []
+    page = 1
+    while True:
+        out_path = out_dir / f"page_{page:04d}.xml"
+        response = fetch_page(params, out_path)
+        root = ET.fromstring(response.content)
+        check_oai_error(root)
+        paths.append(out_path)
+
+        token = get_resumption_token(root)
+        if token is None:
+            break
+        if max_pages is not None and page >= max_pages:
+            break
+
+        params = {"verb": "ListRecords", "resumptionToken": token}
+        page += 1
+        time.sleep(DELAY_SECONDS)
+    return paths
