@@ -23,4 +23,13 @@ def fetch_page(params: dict[str, str], out_path: Path) -> requests.Response:
     Returns:
         The response object, so the caller can inspect status and headers.
     """
-    ...
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    response = requests.get(
+        BASE_URL,
+        params=params,
+        headers={"User-Agent": USER_AGENT},
+        timeout=TIMEOUT_SECONDS,
+    )
+    response.raise_for_status()
+    out_path.write_bytes(response.content)
+    return response
